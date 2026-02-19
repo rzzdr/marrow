@@ -23,12 +23,12 @@ type handlers struct {
 func (h *handlers) getProjectSummary(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj, err := h.store.ReadProject()
 	if err != nil {
-		return mcp.NewToolResultError("failed to read project: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read project: %v", err)), nil
 	}
 
 	index, err := h.store.ReadIndex()
 	if err != nil {
-		return mcp.NewToolResultError("failed to read index: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read index: %v", err)), nil
 	}
 
 	var b strings.Builder
@@ -78,7 +78,7 @@ func (h *handlers) getProjectSummary(_ context.Context, req mcp.CallToolRequest)
 func (h *handlers) getBestExperiment(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	index, err := h.store.ReadIndex()
 	if err != nil {
-		return mcp.NewToolResultError("failed to read index: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read index: %v", err)), nil
 	}
 
 	if index.Computed.BestExperiment == "" {
@@ -87,7 +87,7 @@ func (h *handlers) getBestExperiment(_ context.Context, req mcp.CallToolRequest)
 
 	exp, err := h.store.ReadExperiment(index.Computed.BestExperiment)
 	if err != nil {
-		return mcp.NewToolResultError("failed to read experiment: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read experiment: %v", err)), nil
 	}
 
 	depth := model.ParseDepth(req.GetString("depth", "standard"))
@@ -102,7 +102,7 @@ func (h *handlers) getExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 
 	exp, err := h.store.ReadExperiment(id)
 	if err != nil {
-		return mcp.NewToolResultError("experiment not found: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("experiment not found: %v", err)), nil
 	}
 
 	depth := model.ParseDepth(req.GetString("depth", "full"))
@@ -112,7 +112,7 @@ func (h *handlers) getExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 func (h *handlers) getLearnings(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	lf, err := h.store.ReadLearnings()
 	if err != nil {
-		return mcp.NewToolResultError("failed to read learnings: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read learnings: %v", err)), nil
 	}
 
 	typ := req.GetString("type", "all")
@@ -161,7 +161,7 @@ func (h *handlers) getLearnings(_ context.Context, req mcp.CallToolRequest) (*mc
 func (h *handlers) getFailures(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	gf, err := h.store.ReadGraveyard()
 	if err != nil {
-		return mcp.NewToolResultError("failed to read graveyard: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read graveyard: %v", err)), nil
 	}
 
 	if len(gf.Entries) == 0 {
@@ -216,12 +216,12 @@ func (h *handlers) getChangelog(_ context.Context, req mcp.CallToolRequest) (*mc
 		}
 		entries, err = h.store.ReadChangelogSince(t)
 		if err != nil {
-			return mcp.NewToolResultError("failed to read changelog: " + err.Error()), nil
+			return mcp.NewToolResultError(fmt.Sprintf("failed to read changelog: %v", err)), nil
 		}
 	} else {
 		cf, err := h.store.ReadChangelog()
 		if err != nil {
-			return mcp.NewToolResultError("failed to read changelog: " + err.Error()), nil
+			return mcp.NewToolResultError(fmt.Sprintf("failed to read changelog: %v", err)), nil
 		}
 		entries = cf.Entries
 	}
@@ -241,7 +241,7 @@ func (h *handlers) getChangelog(_ context.Context, req mcp.CallToolRequest) (*mc
 func (h *handlers) getExperimentChain(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	index, err := h.store.ReadIndex()
 	if err != nil {
-		return mcp.NewToolResultError("failed to read index: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read index: %v", err)), nil
 	}
 
 	if len(index.Computed.ExperimentChain) == 0 {
@@ -283,7 +283,7 @@ func (h *handlers) getExperimentsByTag(_ context.Context, req mcp.CallToolReques
 
 	exps, err := h.store.ListExperimentsByTag(tags)
 	if err != nil {
-		return mcp.NewToolResultError("failed to list experiments: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to list experiments: %v", err)), nil
 	}
 
 	if len(exps) == 0 {
@@ -346,7 +346,7 @@ func (h *handlers) compareExperiments(_ context.Context, req mcp.CallToolRequest
 func (h *handlers) getAllExperiments(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	exps, err := h.store.ListExperiments()
 	if err != nil {
-		return mcp.NewToolResultError("failed to list experiments: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to list experiments: %v", err)), nil
 	}
 
 	if len(exps) == 0 {
@@ -368,7 +368,7 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 
 	proj, err := h.store.ReadProject()
 	if err != nil {
-		return mcp.NewToolResultError("failed to read project: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read project: %v", err)), nil
 	}
 
 	status, err := req.RequireString("status")
@@ -382,7 +382,7 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 
 	id, err := h.store.NextExperimentID()
 	if err != nil {
-		return mcp.NewToolResultError("failed to generate ID: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to generate ID: %v", err)), nil
 	}
 
 	metricVal := req.GetFloat("metric_value", 0)
@@ -428,7 +428,7 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 	}
 
 	if err := h.store.WriteExperiment(exp); err != nil {
-		return mcp.NewToolResultError("failed to write experiment: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to write experiment: %v", err)), nil
 	}
 
 	var warning string
@@ -486,7 +486,7 @@ func (h *handlers) addLearning(_ context.Context, req mcp.CallToolRequest) (*mcp
 
 	id, err := h.store.AddLearning(l)
 	if err != nil {
-		return mcp.NewToolResultError("failed to add learning: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to add learning: %v", err)), nil
 	}
 
 	var warnings []string
@@ -542,7 +542,7 @@ func (h *handlers) addGraveyardEntry(_ context.Context, req mcp.CallToolRequest)
 
 	id, err := h.store.AddGraveyardEntry(g)
 	if err != nil {
-		return mcp.NewToolResultError("failed to add entry: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to add entry: %v", err)), nil
 	}
 
 	var warnings []string
@@ -583,7 +583,7 @@ func (h *handlers) updatePinned(_ context.Context, req mcp.CallToolRequest) (*mc
 
 	index, err := h.store.ReadIndex()
 	if err != nil {
-		return mcp.NewToolResultError("failed to read index: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read index: %v", err)), nil
 	}
 
 	p := &index.Pinned
@@ -605,7 +605,7 @@ func (h *handlers) updatePinned(_ context.Context, req mcp.CallToolRequest) (*mc
 			p.Notes += "\n" + value
 		}
 		if err := h.store.WriteIndex(index); err != nil {
-			return mcp.NewToolResultError("failed to write index: " + err.Error()), nil
+			return mcp.NewToolResultError(fmt.Sprintf("failed to write index: %v", err)), nil
 		}
 		_ = h.store.AppendChangelog(model.ChangelogEntry{
 			Action:  "pinned_updated",
@@ -643,7 +643,7 @@ func (h *handlers) updatePinned(_ context.Context, req mcp.CallToolRequest) (*mc
 	}
 
 	if err := h.store.WriteIndex(index); err != nil {
-		return mcp.NewToolResultError("failed to write index: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to write index: %v", err)), nil
 	}
 
 	_ = h.store.AppendChangelog(model.ChangelogEntry{
@@ -666,7 +666,7 @@ func (h *handlers) getPrelude(_ context.Context, req mcp.CallToolRequest) (*mcp.
 
 	proj, err := h.store.ReadProject()
 	if err != nil {
-		return mcp.NewToolResultError("failed to read project: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read project: %v", err)), nil
 	}
 	index, _ := h.store.ReadIndex()
 
@@ -748,7 +748,7 @@ func experimentResult(exp model.Experiment, depth model.Depth) (*mcp.CallToolRes
 	fe := format.FilterExperiment(exp, depth)
 	y, err := format.MarshalYAMLString(fe)
 	if err != nil {
-		return mcp.NewToolResultError("marshaling failed: " + err.Error()), nil
+		return mcp.NewToolResultError(fmt.Sprintf("marshaling failed: %v", err)), nil
 	}
 	return toolResultWithMeta(y, format.EstimateTokens(y), string(depth)), nil
 }
