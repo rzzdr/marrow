@@ -70,10 +70,24 @@ func toSet(items []string) map[string]bool {
 	return s
 }
 
+var stopWords = map[string]bool{
+	"about": true, "also": true, "based": true, "batch": true, "been": true,
+	"before": true, "between": true, "both": true, "could": true, "data": true,
+	"does": true, "each": true, "first": true, "from": true, "have": true,
+	"into": true, "just": true, "like": true, "make": true, "model": true,
+	"more": true, "most": true, "much": true, "only": true, "other": true,
+	"over": true, "same": true, "should": true, "some": true, "such": true,
+	"than": true, "that": true, "them": true, "then": true, "there": true,
+	"these": true, "they": true, "this": true, "very": true, "were": true,
+	"what": true, "when": true, "which": true, "will": true, "with": true,
+	"would": true, "your": true, "test": true, "using": true, "used": true,
+	"value": true, "after": true,
+}
+
 func extractWords(text string) map[string]bool {
 	words := make(map[string]bool)
 	for _, w := range strings.Fields(strings.ToLower(text)) {
-		if len(w) > 3 {
+		if len(w) > 3 && !stopWords[w] {
 			words[w] = true
 		}
 	}
@@ -96,7 +110,7 @@ func hasWordOverlap(a, b map[string]bool) bool {
 			count++
 		}
 	}
-	return count >= 2
+	return count >= 3
 }
 
 func hasTagOverlap(a, b model.Learning) bool {

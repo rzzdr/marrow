@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -11,6 +12,15 @@ import (
 	"github.com/rzzdr/marrow/internal/format"
 	"github.com/rzzdr/marrow/internal/model"
 )
+
+var validExperimentID = regexp.MustCompile(`^exp_\d{3,}$`)
+
+func ValidateExperimentID(id string) error {
+	if !validExperimentID.MatchString(id) {
+		return fmt.Errorf("invalid experiment ID %q: must match exp_NNN", id)
+	}
+	return nil
+}
 
 func (s *Store) NextExperimentID() (string, error) {
 	entries, err := os.ReadDir(s.experimentsDir())
@@ -39,10 +49,16 @@ func (s *Store) NextExperimentID() (string, error) {
 }
 
 func (s *Store) WriteExperiment(exp model.Experiment) error {
+	if err := ValidateExperimentID(exp.ID); err != nil {
+		return err
+	}
 	return format.WriteYAML(s.experimentPath(exp.ID), exp)
 }
 
 func (s *Store) ReadExperiment(id string) (model.Experiment, error) {
+	if err := ValidateExperimentID(id); err != nil {
+		return model.Experiment{}, err
+	}
 	var exp model.Experiment
 	err := format.ReadYAML(s.experimentPath(id), &exp)
 	return exp, err
@@ -99,6 +115,9 @@ func (s *Store) ListExperimentsByTag(tags []string) ([]model.Experiment, error) 
 }
 
 func (s *Store) DeleteExperiment(id string) error {
+	if err := ValidateExperimentID(id); err != nil {
+		return err
+	}
 	path := s.experimentPath(id)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("experiment %s not found", id)

@@ -1,6 +1,9 @@
 package index
 
 import (
+	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/rzzdr/marrow/internal/model"
@@ -8,10 +11,16 @@ import (
 )
 
 func Rebuild(s *store.Store) (model.Index, error) {
-	idx, _ := s.ReadIndex()
+	idx, err := s.ReadIndex()
+	if err != nil && !os.IsNotExist(err) {
+		return idx, fmt.Errorf("reading existing index (pinned data at risk): %w", err)
+	}
 
 	proj, err := s.ReadProject()
 	if err != nil {
+		return idx, err
+	}
+	if err := proj.Metric.Validate(); err != nil {
 		return idx, err
 	}
 
@@ -49,6 +58,9 @@ func UpdateIncremental(s *store.Store, newExp model.Experiment) (model.Index, er
 	if err != nil {
 		return idx, err
 	}
+	if err := proj.Metric.Validate(); err != nil {
+		return idx, err
+	}
 
 	c := &idx.Computed
 	c.LastUpdated = time.Now().UTC()
@@ -70,14 +82,16 @@ func UpdateIncremental(s *store.Store, newExp model.Experiment) (model.Index, er
 	}
 
 	isBetter := false
-	if c.BestMetric == nil {
-		isBetter = true
-	} else {
-		higher := proj.Metric.Direction == "higher_is_better"
-		if higher {
-			isBetter = newExp.Metric.Value > c.BestMetric.Value
+	if newExp.Status != "failed" {
+		if c.BestMetric == nil {
+			isBetter = true
 		} else {
-			isBetter = newExp.Metric.Value < c.BestMetric.Value
+			higher := strings.EqualFold(proj.Metric.Direction, "higher_is_better")
+			if higher {
+				isBetter = newExp.Metric.Value > c.BestMetric.Value
+			} else {
+				isBetter = newExp.Metric.Value < c.BestMetric.Value
+			}
 		}
 	}
 

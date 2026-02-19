@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -19,22 +20,14 @@ func Execute() error {
 	return rootCmd.Execute()
 }
 
-func getStore() *store.Store {
+func findMarrowRoot() (string, error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		dir = "."
-	}
-	return store.New(dir)
-}
-
-func findMarrowRoot() string {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "."
+		return "", fmt.Errorf("getting working directory: %w", err)
 	}
 	for {
 		if _, err := os.Stat(filepath.Join(dir, ".marrow")); err == nil {
-			return dir
+			return dir, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
@@ -42,12 +35,16 @@ func findMarrowRoot() string {
 		}
 		dir = parent
 	}
-	cwd, _ := os.Getwd()
-	return cwd
+	return "", fmt.Errorf("no .marrow/ directory found in any parent; run 'marrow init' first")
 }
 
 func getStoreFromRoot() *store.Store {
-	return store.New(findMarrowRoot())
+	root, err := findMarrowRoot()
+	if err != nil {
+		cwd, _ := os.Getwd()
+		return store.New(cwd)
+	}
+	return store.New(root)
 }
 
 func init() {

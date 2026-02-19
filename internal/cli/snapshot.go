@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rzzdr/marrow/internal/model"
+	"github.com/rzzdr/marrow/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -29,6 +30,9 @@ var snapshotCreateCmd = &cobra.Command{
 		}
 
 		src := s.Root()
+		if err := util.SafeName(snapshotName); err != nil {
+			return fmt.Errorf("invalid snapshot name: %w", err)
+		}
 		fullName := time.Now().UTC().Format("20060102T150405") + "_" + snapshotName
 		dst := filepath.Join(src, "snapshots", fullName)
 		if _, err := os.Stat(dst); err == nil {

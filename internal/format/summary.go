@@ -38,6 +38,12 @@ func ExperimentOneLiner(e model.Experiment) string {
 	if changeSummary == "" && e.BaseModel != "" {
 		changeSummary = "baseline " + e.BaseModel
 	}
+	if changeSummary == "" && e.Notes != "" {
+		changeSummary = e.Notes
+		if len(changeSummary) > 60 {
+			changeSummary = changeSummary[:57] + "..."
+		}
+	}
 
 	metricStr := fmt.Sprintf("%s %.4f", e.Metric.Name, e.Metric.Value)
 	if e.Metric.Delta != 0 {

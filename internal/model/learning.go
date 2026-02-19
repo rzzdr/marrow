@@ -7,7 +7,6 @@ type LearningType string
 const (
 	LearningProven     LearningType = "proven"
 	LearningAssumption LearningType = "assumption"
-	LearningUnknown    LearningType = "unknown"
 )
 
 type Learning struct {

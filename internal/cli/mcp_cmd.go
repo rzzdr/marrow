@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 
+	mcpserver "github.com/rzzdr/marrow/internal/mcp"
 	"github.com/spf13/cobra"
 )
 
@@ -14,6 +15,6 @@ var mcpCmd = &cobra.Command{
 		if !s.Exists() {
 			return fmt.Errorf("no .marrow/ found. Run 'marrow init' first")
 		}
-		return runMCPServer(s)
+		return mcpserver.Serve(s)
 	},
 }

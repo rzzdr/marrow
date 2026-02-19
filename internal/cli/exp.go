@@ -116,6 +116,12 @@ var (
 	expListLimit  int
 )
 
+var (
+	expEditNotes  string
+	expEditStatus string
+	expEditTags   string
+)
+
 var expListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all experiments",
@@ -215,12 +221,6 @@ func init() {
 	expCmd.AddCommand(expEditCmd)
 	expCmd.AddCommand(expDeleteCmd)
 }
-
-var (
-	expEditNotes  string
-	expEditStatus string
-	expEditTags   string
-)
 
 var expEditCmd = &cobra.Command{
 	Use:   "edit [id]",

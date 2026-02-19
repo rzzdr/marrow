@@ -5,25 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/rzzdr/marrow/internal/format"
 	"github.com/rzzdr/marrow/internal/util"
 )
-
-func (s *Store) ReadContext(name string) (map[string]any, error) {
-	if err := util.SafeName(name); err != nil {
-		return nil, err
-	}
-	var data map[string]any
-	err := format.ReadYAML(s.contextPath(name), &data)
-	return data, err
-}
-
-func (s *Store) WriteContext(name string, data map[string]any) error {
-	if err := util.SafeName(name); err != nil {
-		return err
-	}
-	return format.WriteYAML(s.contextPath(name), data)
-}
 
 func (s *Store) ListContextFiles() ([]string, error) {
 	entries, err := os.ReadDir(s.contextDir())

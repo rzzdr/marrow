@@ -48,7 +48,7 @@ func (s *Store) ReadChangelogSince(since time.Time) ([]model.ChangelogEntry, err
 
 	var filtered []model.ChangelogEntry
 	for _, e := range cf.Entries {
-		if e.Timestamp.After(since) {
+		if !e.Timestamp.Before(since) {
 			filtered = append(filtered, e)
 		}
 	}

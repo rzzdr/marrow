@@ -317,8 +317,8 @@ func (h *handlers) compareExperiments(_ context.Context, req mcp.CallToolRequest
 	proj, _ := h.store.ReadProject()
 	delta := exp2.Metric.Value - exp1.Metric.Value
 	direction := "improvement"
-	if (proj.Metric.Direction == "higher_is_better" && delta < 0) ||
-		(proj.Metric.Direction == "lower_is_better" && delta > 0) {
+	if (strings.EqualFold(proj.Metric.Direction, "higher_is_better") && delta < 0) ||
+		(strings.EqualFold(proj.Metric.Direction, "lower_is_better") && delta > 0) {
 		direction = "regression"
 	}
 	if delta == 0 {
@@ -342,6 +342,11 @@ func (h *handlers) getAllExperiments(_ context.Context, req mcp.CallToolRequest)
 
 	if len(exps) == 0 {
 		return mcp.NewToolResultText("No experiments yet."), nil
+	}
+
+	limit := int(req.GetFloat("limit", 0))
+	if limit > 0 && len(exps) > limit {
+		exps = exps[len(exps)-limit:]
 	}
 
 	depth := model.ParseDepth(req.GetString("depth", "summary"))
@@ -581,7 +586,16 @@ func (h *handlers) updatePinned(_ context.Context, req mcp.CallToolRequest) (*mc
 
 	switch action {
 	case "add":
-		*target = append(*target, value)
+		exists := false
+		for _, v := range *target {
+			if v == value {
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			*target = append(*target, value)
+		}
 	case "remove":
 		filtered := (*target)[:0]
 		for _, v := range *target {
@@ -618,12 +632,15 @@ func (h *handlers) getPrelude(_ context.Context, req mcp.CallToolRequest) (*mcp.
 
 	var b strings.Builder
 
-	proj, _ := h.store.ReadProject()
+	proj, err := h.store.ReadProject()
+	if err != nil {
+		return mcp.NewToolResultError("failed to read project: " + err.Error()), nil
+	}
 	index, _ := h.store.ReadIndex()
 
 	fmt.Fprintf(&b, "Project: %s | Task: %s | Metric: %s (%s)\n", proj.Name, proj.TaskType, proj.Metric.Name, proj.Metric.Direction)
 	c := index.Computed
-	if c.BestExperiment != "" {
+	if c.BestExperiment != "" && c.BestMetric != nil {
 		fmt.Fprintf(&b, "Best: %s (%s = %.4f)\n", c.BestExperiment, c.BestMetric.Name, c.BestMetric.Value)
 	}
 

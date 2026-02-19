@@ -3,8 +3,10 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/rzzdr/marrow/internal/model"
+	"github.com/rzzdr/marrow/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -15,15 +17,17 @@ var initCmd = &cobra.Command{
 	Short: "Initialize a new Marrow project",
 	Long:  "Scaffold the .marrow/ directory with project configuration.",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStore()
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("getting working directory: %w", err)
+		}
+		s := store.New(cwd)
 		if s.Exists() {
 			return fmt.Errorf(".marrow/ already exists in this directory")
 		}
 
-		// Warn if a parent directory already has .marrow
-		root := findMarrowRoot()
-		cwd, _ := os.Getwd()
-		if root != cwd {
+		root, rootErr := findMarrowRoot()
+		if rootErr == nil && root != cwd {
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: parent directory %s already has .marrow/; this will create a nested project\n", root)
 		}
 
@@ -42,6 +46,8 @@ var initCmd = &cobra.Command{
 		if initTemplate != "" && !validTemplates[initTemplate] {
 			return fmt.Errorf("unknown template %q: valid templates are kaggle-tabular, llm-finetune, paper-replication, rl-experiment", initTemplate)
 		}
+
+		project.Template = initTemplate
 
 		switch initTemplate {
 		case "kaggle-tabular":
@@ -69,6 +75,9 @@ var initCmd = &cobra.Command{
 		if err := s.Init(project); err != nil {
 			return fmt.Errorf("initializing marrow: %w", err)
 		}
+
+		gitignorePath := filepath.Join(s.Root(), ".gitignore")
+		_ = os.WriteFile(gitignorePath, []byte("snapshots/\n.marrow-tmp-*\n"), 0644)
 
 		fmt.Println("Initialized .marrow/ project")
 		if initTemplate != "" {

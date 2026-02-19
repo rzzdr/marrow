@@ -106,6 +106,7 @@ Prefer summary depth for listings, full depth only for specific experiments.`),
 		mcp.NewTool("get_all_experiments",
 			mcp.WithDescription("Get all experiments. Can be expensive. Use depth=summary to minimize tokens."),
 			mcp.WithString("depth", mcp.Description("summary|standard|full"), mcp.DefaultString("summary")),
+			mcp.WithNumber("limit", mcp.Description("Maximum number of experiments to return (most recent). 0 = all.")),
 		),
 		h.getAllExperiments,
 	)
