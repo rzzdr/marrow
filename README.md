@@ -340,7 +340,7 @@ Always includes project summary and proven learnings as a baseline, then adds in
 
 ## Status
 
-This is early. It works — the test suite covers the main paths and the MCP server handles real agent sessions — but there's no CI pipeline yet, the tests are a Fish shell script (not Go tests), and it hasn't been tested on Windows. Things might change.
+This is early. It works, the test suite covers the main paths and the MCP server handles real agent sessions — but there's no CI pipeline yet, and it hasn't been tested on Windows or Mac as I am a linux user. Things might change.
 
 If you run into something broken, open an issue.
 
