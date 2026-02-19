@@ -224,3 +224,71 @@ func TestCLI_ExpDelete_WarningsToStderrOnChangelogFailure(t *testing.T) {
 		t.Errorf("expected warning on stderr, got %q", stderr.String())
 	}
 }
+
+func TestCLI_ExpEdit_WarningsToStderrOnChangelogFailure(t *testing.T) {
+	bin := buildBinary(t)
+	dir := setupCLIProject(t)
+
+	// Create an experiment first
+	createCmd := exec.Command(bin, "exp", "new", "--metric", "0.85", "--status", "improved")
+	createCmd.Dir = dir
+	if out, err := createCmd.CombinedOutput(); err != nil {
+		t.Fatalf("failed to create experiment: %v\n%s", err, out)
+	}
+
+	// Make changelog unwritable
+	changelogPath := filepath.Join(dir, ".marrow", "changelog.yaml")
+	if err := os.Chmod(changelogPath, 0000); err != nil {
+		t.Skipf("cannot change file permissions: %v", err)
+	}
+	defer os.Chmod(changelogPath, 0644)
+
+	cmd := exec.Command(bin, "exp", "edit", "exp_001", "--notes", "updated notes")
+	cmd.Dir = dir
+
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		t.Errorf("expected exit 0 with warnings, got error: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "warning:") {
+		t.Errorf("expected warning on stderr, got %q", stderr.String())
+	}
+}
+
+func TestCLI_SnapshotCreate_WarningsToStderrOnChangelogFailure(t *testing.T) {
+	bin := buildBinary(t)
+	dir := setupCLIProject(t)
+
+	// Remove the changelog file and replace it with a directory.
+	// This makes ReadChangelog fail (not a regular file), which causes
+	// AppendChangelog to return an error after the snapshot is created.
+	changelogPath := filepath.Join(dir, ".marrow", "changelog.yaml")
+	if err := os.Remove(changelogPath); err != nil {
+		t.Fatalf("failed to remove changelog: %v", err)
+	}
+	if err := os.Mkdir(changelogPath, 0755); err != nil {
+		t.Fatalf("failed to create directory at changelog path: %v", err)
+	}
+	defer func() {
+		os.RemoveAll(changelogPath)
+	}()
+
+	cmd := exec.Command(bin, "snapshot", "create", "--name", "test-snap")
+	cmd.Dir = dir
+
+	var stdout, stderr strings.Builder
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		t.Errorf("expected exit 0 with warnings, got error: %v", err)
+	}
+	if !strings.Contains(stderr.String(), "warning:") {
+		t.Errorf("expected warning on stderr, got %q", stderr.String())
+	}
+}

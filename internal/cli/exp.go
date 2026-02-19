@@ -38,9 +38,6 @@ var expNewCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if !s.Exists() {
-			return fmt.Errorf("no .marrow/ found. Run 'marrow init' first")
-		}
 
 		if !validStatuses[expStatus] {
 			return fmt.Errorf("invalid status %q: must be improved|degraded|neutral|failed", expStatus)

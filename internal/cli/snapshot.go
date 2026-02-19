@@ -28,9 +28,6 @@ var snapshotCreateCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if !s.Exists() {
-			return fmt.Errorf("no .marrow/ found")
-		}
 
 		src := s.Root()
 		if err := util.SafeName(snapshotName); err != nil {

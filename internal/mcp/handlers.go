@@ -334,14 +334,15 @@ func (h *handlers) compareExperiments(_ context.Context, req mcp.CallToolRequest
 	fmt.Fprintf(&b, "%s:\n  %s = %.4f | status: %s | model: %s\n",
 		id2, exp2.Metric.Name, exp2.Metric.Value, exp2.Status, exp2.BaseModel)
 
-	proj, err := h.store.ReadProject()
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("failed to read project: %v", err)), nil
-	}
 	delta := exp2.Metric.Value - exp1.Metric.Value
+	metricDirection := "higher_is_better" // default when project is unreadable
+	proj, err := h.store.ReadProject()
+	if err == nil {
+		metricDirection = proj.Metric.Direction
+	}
 	direction := "improvement"
-	if (strings.EqualFold(proj.Metric.Direction, "higher_is_better") && delta < 0) ||
-		(strings.EqualFold(proj.Metric.Direction, "lower_is_better") && delta > 0) {
+	if (strings.EqualFold(metricDirection, "higher_is_better") && delta < 0) ||
+		(strings.EqualFold(metricDirection, "lower_is_better") && delta > 0) {
 		direction = "regression"
 	}
 	if delta == 0 {
@@ -618,14 +619,15 @@ func (h *handlers) updatePinned(_ context.Context, req mcp.CallToolRequest) (*mc
 		if err := h.store.WriteIndex(index); err != nil {
 			return mcp.NewToolResultError(fmt.Sprintf("failed to write index: %v", err)), nil
 		}
+		var warnings []string
 		if err := h.store.AppendChangelog(model.ChangelogEntry{
 			Action:  "pinned_updated",
 			Summary: "notes updated",
 		}); err != nil {
-			result := "Updated notes." + formatWarnings([]string{fmt.Sprintf("changelog append failed: %v", err)})
-			return mcp.NewToolResultText(result), nil
+			warnings = append(warnings, fmt.Sprintf("changelog append failed: %v", err))
 		}
-		return mcp.NewToolResultText("Updated notes."), nil
+		result := "Updated notes." + formatWarnings(warnings)
+		return mcp.NewToolResultText(result), nil
 	default:
 		return mcp.NewToolResultError(fmt.Sprintf("unknown field: %s. Use: do_not_try, deferred, data_warnings, critical_features, notes", field)), nil
 	}
@@ -687,6 +689,7 @@ func (h *handlers) getPrelude(_ context.Context, req mcp.CallToolRequest) (*mcp.
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to read project: %v", err)), nil
 	}
+	// best-effort: index may not exist yet, fields default to zero values
 	index, _ := h.store.ReadIndex()
 
 	fmt.Fprintf(&b, "Project: %s | Task: %s | Metric: %s (%s)\n", proj.Name, proj.TaskType, proj.Metric.Name, proj.Metric.Direction)

@@ -29,9 +29,6 @@ var learnAddCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if !s.Exists() {
-			return fmt.Errorf("no .marrow/ found. Run 'marrow init' first")
-		}
 
 		if learnType != "proven" && learnType != "assumption" {
 			return fmt.Errorf("invalid type %q: must be proven|assumption", learnType)
