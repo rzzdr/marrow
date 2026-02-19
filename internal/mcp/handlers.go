@@ -20,6 +20,14 @@ type handlers struct {
 	mu    sync.Mutex
 }
 
+// formatWarnings formats a slice of warnings into a user-friendly string
+func formatWarnings(warnings []string) string {
+	if len(warnings) == 0 {
+		return ""
+	}
+	return "\n\n⚠ Warnings:\n  - " + strings.Join(warnings, "\n  - ")
+}
+
 func (h *handlers) getProjectSummary(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	proj, err := h.store.ReadProject()
 	if err != nil {
@@ -428,7 +436,6 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("could not compute baseline from index: %v", err))
 		} else {
-			// err == nil, curIdx is valid
 			if curIdx.Computed.BestMetric != nil {
 				exp.Metric.Baseline = curIdx.Computed.BestMetric.Value
 				exp.Metric.Delta = exp.Metric.Value - curIdx.Computed.BestMetric.Value
@@ -453,9 +460,7 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 	}
 
 	result := fmt.Sprintf("Logged experiment %s (%s = %.4f, %s)", id, proj.Metric.Name, metricVal, status)
-	if len(warnings) > 0 {
-		result += "\n\n⚠ Warnings:\n  - " + strings.Join(warnings, "\n  - ")
-	}
+	result += formatWarnings(warnings)
 	return mcp.NewToolResultText(result), nil
 }
 
@@ -508,9 +513,7 @@ func (h *handlers) addLearning(_ context.Context, req mcp.CallToolRequest) (*mcp
 	}
 
 	result := fmt.Sprintf("Added learning %s [%s]", id, typ)
-	if len(warnings) > 0 {
-		result += "\n\n⚠ Warnings:\n  - " + strings.Join(warnings, "\n  - ")
-	}
+	result += formatWarnings(warnings)
 	if len(conflicts) > 0 {
 		result += "\n\n⚠ Potential conflicts:"
 		for _, c := range conflicts {
@@ -563,9 +566,7 @@ func (h *handlers) addGraveyardEntry(_ context.Context, req mcp.CallToolRequest)
 	}
 
 	result := fmt.Sprintf("Added graveyard entry %s", id)
-	if len(warnings) > 0 {
-		result += "\n\n⚠ Warnings:\n  - " + strings.Join(warnings, "\n  - ")
-	}
+	result += formatWarnings(warnings)
 	return mcp.NewToolResultText(result), nil
 }
 
