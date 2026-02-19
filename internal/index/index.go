@@ -1,6 +1,8 @@
 package index
 
 import (
+	"time"
+
 	"github.com/rzzdr/marrow/internal/model"
 	"github.com/rzzdr/marrow/internal/store"
 )
@@ -49,6 +51,7 @@ func UpdateIncremental(s *store.Store, newExp model.Experiment) (model.Index, er
 	}
 
 	c := &idx.Computed
+	c.LastUpdated = time.Now().UTC()
 	if c.StatusCounts == nil {
 		c.StatusCounts = make(map[string]int)
 	}
@@ -84,10 +87,7 @@ func UpdateIncremental(s *store.Store, newExp model.Experiment) (model.Index, er
 
 		exps, err := s.ListExperiments()
 		if err == nil {
-			learnings, _ := s.ReadLearnings()
-			graveyard, _ := s.ReadGraveyard()
-			full := Compute(exps, learnings, graveyard, proj.Metric)
-			c.ExperimentChain = full.ExperimentChain
+			c.ExperimentChain = computeChain(exps, newExp, proj.Metric)
 		}
 	}
 
@@ -95,4 +95,28 @@ func UpdateIncremental(s *store.Store, newExp model.Experiment) (model.Index, er
 		return idx, err
 	}
 	return idx, nil
+}
+
+// UpdateLearningCounts refreshes only the learning/graveyard counts in the index.
+func UpdateLearningCounts(s *store.Store) error {
+	idx, err := s.ReadIndex()
+	if err != nil {
+		return err
+	}
+
+	learnings, err := s.ReadLearnings()
+	if err != nil {
+		return err
+	}
+
+	graveyard, err := s.ReadGraveyard()
+	if err != nil {
+		return err
+	}
+
+	idx.Computed.ProvenCount = len(learnings.Proven)
+	idx.Computed.AssumptionCount = len(learnings.Assumptions)
+	idx.Computed.GraveyardCount = len(graveyard.Entries)
+
+	return s.WriteIndex(idx)
 }

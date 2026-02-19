@@ -1,6 +1,7 @@
 package index
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ func Compute(
 	for t := range tagSet {
 		ci.AllTags = append(ci.AllTags, t)
 	}
+	sort.Strings(ci.AllTags)
 
 	best := findBest(exps, metric)
 	if best != nil {
@@ -56,8 +58,15 @@ func findBest(exps []model.Experiment, metric model.MetricDef) *model.Experiment
 	}
 
 	higher := strings.EqualFold(metric.Direction, "higher_is_better")
-	best := &exps[0]
-	for i := 1; i < len(exps); i++ {
+	var best *model.Experiment
+	for i := range exps {
+		if exps[i].Status == "failed" {
+			continue
+		}
+		if best == nil {
+			best = &exps[i]
+			continue
+		}
 		if higher {
 			if exps[i].Metric.Value > best.Metric.Value {
 				best = &exps[i]

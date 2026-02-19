@@ -31,7 +31,11 @@ func (s *Store) NextExperimentID() (string, error) {
 			}
 		}
 	}
-	return fmt.Sprintf("exp_%03d", maxNum+1), nil
+	width := 3
+	if maxNum >= 999 {
+		width = len(strconv.Itoa(maxNum + 1))
+	}
+	return fmt.Sprintf("exp_%0*d", width, maxNum+1), nil
 }
 
 func (s *Store) WriteExperiment(exp model.Experiment) error {
@@ -92,4 +96,29 @@ func (s *Store) ListExperimentsByTag(tags []string) ([]model.Experiment, error) 
 		}
 	}
 	return filtered, nil
+}
+
+func (s *Store) DeleteExperiment(id string) error {
+	path := s.experimentPath(id)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("experiment %s not found", id)
+	}
+	return os.Remove(path)
+}
+
+func (s *Store) FindParentRefs(id string) ([]string, error) {
+	exps, err := s.ListExperiments()
+	if err != nil {
+		return nil, err
+	}
+	var refs []string
+	for _, e := range exps {
+		for _, pid := range e.Parents {
+			if pid == id {
+				refs = append(refs, e.ID)
+				break
+			}
+		}
+	}
+	return refs, nil
 }

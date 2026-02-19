@@ -59,4 +59,5 @@ func init() {
 	rootCmd.AddCommand(summaryCmd)
 	rootCmd.AddCommand(snapshotCmd)
 	rootCmd.AddCommand(mcpCmd)
+	rootCmd.AddCommand(versionCmd)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -11,10 +12,12 @@ import (
 	idx "github.com/rzzdr/marrow/internal/index"
 	"github.com/rzzdr/marrow/internal/model"
 	"github.com/rzzdr/marrow/internal/store"
+	"github.com/rzzdr/marrow/internal/util"
 )
 
 type handlers struct {
 	store *store.Store
+	mu    sync.Mutex
 }
 
 func (h *handlers) getProjectSummary(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -37,7 +40,7 @@ func (h *handlers) getProjectSummary(_ context.Context, req mcp.CallToolRequest)
 	fmt.Fprintf(&b, "\n--- Index ---\n")
 	c := index.Computed
 	fmt.Fprintf(&b, "Experiments: %d\n", c.TotalExperiments)
-	if c.BestExperiment != "" {
+	if c.BestExperiment != "" && c.BestMetric != nil {
 		fmt.Fprintf(&b, "Best: %s (%s = %.4f)\n", c.BestExperiment, c.BestMetric.Name, c.BestMetric.Value)
 	}
 	if len(c.ExperimentChain) > 0 {
@@ -123,7 +126,7 @@ func (h *handlers) getLearnings(_ context.Context, req mcp.CallToolRequest) (*mc
 			for _, l := range lf.Proven {
 				fl := format.FilterLearning(l, depth)
 				if depth == model.DepthSummary {
-					fmt.Fprintf(&b, "  %s\n", format.LearningOneLiner(l))
+					fmt.Fprintf(&b, "  %s\n", format.LearningOneLiner(fl))
 				} else {
 					y, _ := format.MarshalYAMLString(fl)
 					b.WriteString(y)
@@ -138,7 +141,7 @@ func (h *handlers) getLearnings(_ context.Context, req mcp.CallToolRequest) (*mc
 			for _, l := range lf.Assumptions {
 				fl := format.FilterLearning(l, depth)
 				if depth == model.DepthSummary {
-					fmt.Fprintf(&b, "  %s\n", format.LearningOneLiner(l))
+					fmt.Fprintf(&b, "  %s\n", format.LearningOneLiner(fl))
 				} else {
 					y, _ := format.MarshalYAMLString(fl)
 					b.WriteString(y)
@@ -270,10 +273,7 @@ func (h *handlers) getExperimentsByTag(_ context.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError("missing required parameter: tags"), nil
 	}
 
-	tags := strings.Split(tagsStr, ",")
-	for i := range tags {
-		tags[i] = strings.TrimSpace(tags[i])
-	}
+	tags := util.SplitTags(tagsStr)
 
 	exps, err := h.store.ListExperimentsByTag(tags)
 	if err != nil {
@@ -314,8 +314,17 @@ func (h *handlers) compareExperiments(_ context.Context, req mcp.CallToolRequest
 	fmt.Fprintf(&b, "%s:\n  %s = %.4f | status: %s | model: %s\n",
 		id2, exp2.Metric.Name, exp2.Metric.Value, exp2.Status, exp2.BaseModel)
 
+	proj, _ := h.store.ReadProject()
 	delta := exp2.Metric.Value - exp1.Metric.Value
-	fmt.Fprintf(&b, "\nDelta: %+.4f\n", delta)
+	direction := "improvement"
+	if (proj.Metric.Direction == "higher_is_better" && delta < 0) ||
+		(proj.Metric.Direction == "lower_is_better" && delta > 0) {
+		direction = "regression"
+	}
+	if delta == 0 {
+		direction = "no change"
+	}
+	fmt.Fprintf(&b, "\nDelta: %+.4f (%s)\n", delta, direction)
 
 	if exp2.Notes != "" {
 		fmt.Fprintf(&b, "\n%s notes: %s\n", id2, exp2.Notes)
@@ -340,9 +349,21 @@ func (h *handlers) getAllExperiments(_ context.Context, req mcp.CallToolRequest)
 }
 
 func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	proj, err := h.store.ReadProject()
 	if err != nil {
 		return mcp.NewToolResultError("failed to read project: " + err.Error()), nil
+	}
+
+	status, err := req.RequireString("status")
+	if err != nil {
+		return mcp.NewToolResultError("missing required parameter: status"), nil
+	}
+	validStatuses := map[string]bool{"improved": true, "degraded": true, "neutral": true, "failed": true}
+	if !validStatuses[status] {
+		return mcp.NewToolResultError("invalid status: " + status + ". Use: improved|degraded|neutral|failed"), nil
 	}
 
 	id, err := h.store.NextExperimentID()
@@ -351,7 +372,6 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 	}
 
 	metricVal := req.GetFloat("metric_value", 0)
-	status, _ := req.RequireString("status")
 
 	exp := model.Experiment{
 		ID:        id,
@@ -367,18 +387,39 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 
 	parents := req.GetString("parents", "")
 	if parents != "" {
-		exp.Parents = strings.Split(parents, ",")
+		exp.Parents = util.SplitTags(parents)
+		for _, pid := range exp.Parents {
+			if _, err := h.store.ReadExperiment(pid); err != nil {
+				return mcp.NewToolResultError("parent experiment " + pid + " not found"), nil
+			}
+		}
 	}
 	tags := req.GetString("tags", "")
 	if tags != "" {
-		exp.Tags = strings.Split(tags, ",")
+		exp.Tags = util.SplitTags(tags)
+	}
+
+	// Compute delta relative to best parent or current best
+	if len(exp.Parents) > 0 {
+		if parent, err := h.store.ReadExperiment(exp.Parents[0]); err == nil {
+			exp.Metric.Baseline = parent.Metric.Value
+			exp.Metric.Delta = exp.Metric.Value - parent.Metric.Value
+		}
+	} else {
+		curIdx, _ := h.store.ReadIndex()
+		if curIdx.Computed.BestMetric != nil {
+			exp.Metric.Baseline = curIdx.Computed.BestMetric.Value
+			exp.Metric.Delta = exp.Metric.Value - curIdx.Computed.BestMetric.Value
+		}
 	}
 
 	if err := h.store.WriteExperiment(exp); err != nil {
 		return mcp.NewToolResultError("failed to write experiment: " + err.Error()), nil
 	}
 
+	var warning string
 	if _, err := idx.UpdateIncremental(h.store, exp); err != nil {
+		warning = fmt.Sprintf("\nwarning: index update failed: %v", err)
 	}
 
 	_ = h.store.AppendChangelog(model.ChangelogEntry{
@@ -387,10 +428,17 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 		Summary: format.ExperimentOneLiner(exp),
 	})
 
-	return mcp.NewToolResultText(fmt.Sprintf("Logged experiment %s (%s = %.4f, %s)", id, proj.Metric.Name, metricVal, status)), nil
+	result := fmt.Sprintf("Logged experiment %s (%s = %.4f, %s)", id, proj.Metric.Name, metricVal, status)
+	if warning != "" {
+		result += warning
+	}
+	return mcp.NewToolResultText(result), nil
 }
 
 func (h *handlers) addLearning(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	text, err := req.RequireString("text")
 	if err != nil {
 		return mcp.NewToolResultError("missing text"), nil
@@ -399,6 +447,9 @@ func (h *handlers) addLearning(_ context.Context, req mcp.CallToolRequest) (*mcp
 	if err != nil {
 		return mcp.NewToolResultError("missing type"), nil
 	}
+	if typ != "proven" && typ != "assumption" {
+		return mcp.NewToolResultError("invalid type: " + typ + ". Use: proven|assumption"), nil
+	}
 
 	l := model.Learning{
 		Type: model.LearningType(typ),
@@ -406,7 +457,7 @@ func (h *handlers) addLearning(_ context.Context, req mcp.CallToolRequest) (*mcp
 	}
 	tags := req.GetString("tags", "")
 	if tags != "" {
-		l.Tags = strings.Split(tags, ",")
+		l.Tags = util.SplitTags(tags)
 	}
 
 	learnings, _ := h.store.ReadLearnings()
@@ -425,6 +476,8 @@ func (h *handlers) addLearning(_ context.Context, req mcp.CallToolRequest) (*mcp
 		Summary: text,
 	})
 
+	_ = idx.UpdateLearningCounts(h.store)
+
 	result := fmt.Sprintf("Added learning %s [%s]", id, typ)
 	if len(conflicts) > 0 {
 		result += "\n\n⚠ Potential conflicts:"
@@ -437,6 +490,9 @@ func (h *handlers) addLearning(_ context.Context, req mcp.CallToolRequest) (*mcp
 }
 
 func (h *handlers) addGraveyardEntry(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	approach, err := req.RequireString("approach")
 	if err != nil {
 		return mcp.NewToolResultError("missing approach"), nil
@@ -453,7 +509,7 @@ func (h *handlers) addGraveyardEntry(_ context.Context, req mcp.CallToolRequest)
 	}
 	tags := req.GetString("tags", "")
 	if tags != "" {
-		g.Tags = strings.Split(tags, ",")
+		g.Tags = util.SplitTags(tags)
 	}
 
 	id, err := h.store.AddGraveyardEntry(g)
@@ -467,10 +523,14 @@ func (h *handlers) addGraveyardEntry(_ context.Context, req mcp.CallToolRequest)
 		Summary: approach + " — " + reason,
 	})
 
+	_ = idx.UpdateLearningCounts(h.store)
+
 	return mcp.NewToolResultText(fmt.Sprintf("Added graveyard entry %s", id)), nil
 }
 
 func (h *handlers) updatePinned(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	field, err := req.RequireString("field")
 	if err != nil {
 		return mcp.NewToolResultError("missing field"), nil
@@ -569,9 +629,14 @@ func (h *handlers) getPrelude(_ context.Context, req mcp.CallToolRequest) (*mcp.
 
 	if containsAny(intentLower, "feature", "eda", "data", "column", "variable") {
 		b.WriteString("\n--- Data Context ---\n")
-		for _, name := range []string{"eda", "features"} {
-			if raw, err := h.store.ReadContextRaw(name); err == nil {
-				fmt.Fprintf(&b, "[%s]\n%s\n", name, raw)
+		contextNames, _ := h.store.ListContextFiles()
+		for _, name := range contextNames {
+			nameLower := strings.ToLower(name)
+			if containsAny(nameLower, "eda", "feature", "data", "column", "variable", "pipeline", "overview") ||
+				strings.Contains(intentLower, nameLower) {
+				if raw, err := h.store.ReadContextRaw(name); err == nil {
+					fmt.Fprintf(&b, "[%s]\n%s\n", name, raw)
+				}
 			}
 		}
 		if len(index.Pinned.DataWarnings) > 0 {

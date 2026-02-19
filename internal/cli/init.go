@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/rzzdr/marrow/internal/model"
 	"github.com/spf13/cobra"
@@ -19,12 +20,27 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf(".marrow/ already exists in this directory")
 		}
 
+		// Warn if a parent directory already has .marrow
+		root := findMarrowRoot()
+		cwd, _ := os.Getwd()
+		if root != cwd {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: parent directory %s already has .marrow/; this will create a nested project\n", root)
+		}
+
 		project := model.Project{
 			Name: "untitled",
 			Metric: model.MetricDef{
 				Name:      "metric",
 				Direction: "higher_is_better",
 			},
+		}
+
+		validTemplates := map[string]bool{
+			"kaggle-tabular": true, "llm-finetune": true,
+			"paper-replication": true, "rl-experiment": true,
+		}
+		if initTemplate != "" && !validTemplates[initTemplate] {
+			return fmt.Errorf("unknown template %q: valid templates are kaggle-tabular, llm-finetune, paper-replication, rl-experiment", initTemplate)
 		}
 
 		switch initTemplate {

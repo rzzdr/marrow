@@ -5,6 +5,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/rzzdr/marrow/internal/model"
 	"github.com/spf13/cobra"
@@ -27,9 +29,10 @@ var snapshotCreateCmd = &cobra.Command{
 		}
 
 		src := s.Root()
-		dst := filepath.Join(src, "snapshots", snapshotName)
+		fullName := time.Now().UTC().Format("20060102T150405") + "_" + snapshotName
+		dst := filepath.Join(src, "snapshots", fullName)
 		if _, err := os.Stat(dst); err == nil {
-			return fmt.Errorf("snapshot %q already exists", snapshotName)
+			return fmt.Errorf("snapshot %q already exists", fullName)
 		}
 
 		if err := copyDir(src, dst); err != nil {
@@ -38,10 +41,10 @@ var snapshotCreateCmd = &cobra.Command{
 
 		_ = s.AppendChangelog(model.ChangelogEntry{
 			Action:  "snapshot_created",
-			Summary: snapshotName,
+			Summary: fullName,
 		})
 
-		fmt.Printf("Snapshot created: %s\n", snapshotName)
+		fmt.Printf("Snapshot created: %s\n", fullName)
 		return nil
 	},
 }
@@ -86,7 +89,7 @@ func copyDir(src, dst string) error {
 		}
 
 		rel, _ := filepath.Rel(src, path)
-		if rel == "snapshots" || (len(rel) > 10 && rel[:10] == "snapshots/") {
+		if rel == "snapshots" || strings.HasPrefix(rel, "snapshots"+string(filepath.Separator)) {
 			if info.IsDir() {
 				return filepath.SkipDir
 			}
@@ -103,18 +106,25 @@ func copyDir(src, dst string) error {
 }
 
 func copyFile(src, dst string) error {
+	info, err := os.Stat(src)
+	if err != nil {
+		return err
+	}
+
 	in, err := os.Open(src)
 	if err != nil {
 		return err
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
+	out, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, info.Mode())
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
-	_, err = io.Copy(out, in)
-	return err
+	if _, err = io.Copy(out, in); err != nil {
+		out.Close()
+		return err
+	}
+	return out.Close()
 }

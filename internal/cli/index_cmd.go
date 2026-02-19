@@ -42,16 +42,11 @@ var indexShowCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		s := getStoreFromRoot()
 
-		raw, err := s.ReadContextRaw("../index")
+		idx, err := s.ReadIndex()
 		if err != nil {
-			idx, err2 := s.ReadIndex()
-			if err2 != nil {
-				return fmt.Errorf("reading index: %w", err2)
-			}
-			printIndex(idx)
-			return nil
+			return fmt.Errorf("reading index: %w", err)
 		}
-		fmt.Print(raw)
+		printIndex(idx)
 		return nil
 	},
 }

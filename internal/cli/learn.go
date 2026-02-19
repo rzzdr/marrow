@@ -5,6 +5,7 @@ import (
 
 	"github.com/rzzdr/marrow/internal/index"
 	"github.com/rzzdr/marrow/internal/model"
+	"github.com/rzzdr/marrow/internal/util"
 	"github.com/spf13/cobra"
 )
 
@@ -29,14 +30,16 @@ var learnAddCmd = &cobra.Command{
 			return fmt.Errorf("no .marrow/ found. Run 'marrow init' first")
 		}
 
+		if learnType != "proven" && learnType != "assumption" {
+			return fmt.Errorf("invalid type %q: must be proven|assumption", learnType)
+		}
+
 		l := model.Learning{
 			Type: model.LearningType(learnType),
 			Text: args[0],
 		}
 		if learnTags != "" {
-			for _, t := range splitTags(learnTags) {
-				l.Tags = append(l.Tags, t)
-			}
+			l.Tags = util.SplitTags(learnTags)
 		}
 
 		learnings, _ := s.ReadLearnings()
@@ -54,6 +57,8 @@ var learnAddCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
+
+		_ = index.UpdateLearningCounts(s)
 
 		_ = s.AppendChangelog(model.ChangelogEntry{
 			Action:  "learning_added",
@@ -116,13 +121,15 @@ var learnGraveyardAddCmd = &cobra.Command{
 			ExperimentID: graveExpID,
 		}
 		if graveTags != "" {
-			g.Tags = splitTags(graveTags)
+			g.Tags = util.SplitTags(graveTags)
 		}
 
 		id, err := s.AddGraveyardEntry(g)
 		if err != nil {
 			return err
 		}
+
+		_ = index.UpdateLearningCounts(s)
 
 		_ = s.AppendChangelog(model.ChangelogEntry{
 			Action:  "graveyard_added",
@@ -178,29 +185,54 @@ func init() {
 	learnCmd.AddCommand(learnListCmd)
 	learnCmd.AddCommand(learnGraveyardAddCmd)
 	learnCmd.AddCommand(learnGraveyardListCmd)
+	learnCmd.AddCommand(learnDeleteCmd)
+	learnCmd.AddCommand(learnGraveyardDeleteCmd)
 }
 
-func splitTags(s string) []string {
-	var tags []string
-	for _, t := range splitComma(s) {
-		if t != "" {
-			tags = append(tags, t)
+var learnDeleteCmd = &cobra.Command{
+	Use:   "delete [id]",
+	Short: "Delete a learning",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		s := getStoreFromRoot()
+
+		if err := s.DeleteLearning(args[0]); err != nil {
+			return err
 		}
-	}
-	return tags
+
+		_ = index.UpdateLearningCounts(s)
+
+		_ = s.AppendChangelog(model.ChangelogEntry{
+			Action:  "learning_deleted",
+			ID:      args[0],
+			Summary: "deleted learning " + args[0],
+		})
+
+		fmt.Printf("Deleted learning %s\n", args[0])
+		return nil
+	},
 }
 
-func splitComma(s string) []string {
-	var parts []string
-	for _, p := range []byte(s) {
-		if p == ',' {
-			parts = append(parts, "")
-		} else {
-			if len(parts) == 0 {
-				parts = append(parts, "")
-			}
-			parts[len(parts)-1] += string(p)
+var learnGraveyardDeleteCmd = &cobra.Command{
+	Use:   "graveyard-delete [id]",
+	Short: "Delete a graveyard entry",
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		s := getStoreFromRoot()
+
+		if err := s.DeleteGraveyardEntry(args[0]); err != nil {
+			return err
 		}
-	}
-	return parts
+
+		_ = index.UpdateLearningCounts(s)
+
+		_ = s.AppendChangelog(model.ChangelogEntry{
+			Action:  "graveyard_deleted",
+			ID:      args[0],
+			Summary: "deleted graveyard entry " + args[0],
+		})
+
+		fmt.Printf("Deleted graveyard entry %s\n", args[0])
+		return nil
+	},
 }

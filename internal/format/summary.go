@@ -2,6 +2,7 @@ package format
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/rzzdr/marrow/internal/model"
@@ -10,8 +11,14 @@ import (
 func ExperimentOneLiner(e model.Experiment) string {
 	var parts []string
 
-	for _, changes := range e.ChangesFrom {
-		for _, c := range changes {
+	parentIDs := make([]string, 0, len(e.ChangesFrom))
+	for pid := range e.ChangesFrom {
+		parentIDs = append(parentIDs, pid)
+	}
+	sort.Strings(parentIDs)
+
+	for _, pid := range parentIDs {
+		for _, c := range e.ChangesFrom[pid] {
 			switch c.Type {
 			case "param":
 				parts = append(parts, fmt.Sprintf("%s=%s", c.Param, c.To))

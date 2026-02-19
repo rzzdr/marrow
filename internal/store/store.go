@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rzzdr/marrow/internal/format"
 	"github.com/rzzdr/marrow/internal/model"
@@ -46,7 +47,11 @@ func (s *Store) Init(project model.Project) error {
 		return fmt.Errorf("writing project config: %w", err)
 	}
 
-	idx := model.Index{}
+	idx := model.Index{
+		Computed: model.ComputedIndex{
+			LastUpdated: time.Now().UTC(),
+		},
+	}
 	if err := format.WriteYAML(s.indexPath(), idx); err != nil {
 		return fmt.Errorf("writing index: %w", err)
 	}
