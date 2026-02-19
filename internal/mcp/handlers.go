@@ -427,9 +427,12 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 		curIdx, err := h.store.ReadIndex()
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("could not compute baseline from index: %v", err))
-		} else if curIdx.Computed.BestMetric != nil {
-			exp.Metric.Baseline = curIdx.Computed.BestMetric.Value
-			exp.Metric.Delta = exp.Metric.Value - curIdx.Computed.BestMetric.Value
+		} else {
+			// err == nil, curIdx is valid
+			if curIdx.Computed.BestMetric != nil {
+				exp.Metric.Baseline = curIdx.Computed.BestMetric.Value
+				exp.Metric.Delta = exp.Metric.Value - curIdx.Computed.BestMetric.Value
+			}
 		}
 	}
 
