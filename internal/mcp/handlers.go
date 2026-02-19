@@ -622,7 +622,8 @@ func (h *handlers) updatePinned(_ context.Context, req mcp.CallToolRequest) (*mc
 			Action:  "pinned_updated",
 			Summary: "notes updated",
 		}); err != nil {
-			return mcp.NewToolResultText("Updated notes." + formatWarnings([]string{fmt.Sprintf("changelog append failed: %v", err)})), nil
+			result := "Updated notes." + formatWarnings([]string{fmt.Sprintf("changelog append failed: %v", err)})
+			return mcp.NewToolResultText(result), nil
 		}
 		return mcp.NewToolResultText("Updated notes."), nil
 	default:
