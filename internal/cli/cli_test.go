@@ -38,23 +38,34 @@ func setupCLITestStore(t *testing.T) (*store.Store, func()) {
 	}
 
 	return s, func() {
-		os.Chdir(origDir)
+		if err := os.Chdir(origDir); err != nil {
+			t.Logf("warning: failed to restore cwd: %v", err)
+		}
 	}
 }
 
 func TestGetStoreFromRoot_NoMarrowDir(t *testing.T) {
 	dir := t.TempDir()
-	origDir, _ := os.Getwd()
-	defer os.Chdir(origDir)
+	origDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(origDir); err != nil {
+			t.Logf("warning: failed to restore cwd: %v", err)
+		}
+	}()
 
-	os.Chdir(dir)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatalf("failed to chdir: %v", err)
+	}
 
-	_, err := getStoreFromRoot()
-	if err == nil {
+	_, gerr := getStoreFromRoot()
+	if gerr == nil {
 		t.Error("expected error when no .marrow/ exists, got nil")
 	}
-	if !strings.Contains(err.Error(), "no .marrow/ directory found") {
-		t.Errorf("expected descriptive error, got %q", err.Error())
+	if !strings.Contains(gerr.Error(), "no .marrow/ directory found") {
+		t.Errorf("expected descriptive error, got %q", gerr.Error())
 	}
 }
 
