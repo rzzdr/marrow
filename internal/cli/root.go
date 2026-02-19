@@ -38,13 +38,12 @@ func findMarrowRoot() (string, error) {
 	return "", fmt.Errorf("no .marrow/ directory found in any parent; run 'marrow init' first")
 }
 
-func getStoreFromRoot() *store.Store {
+func getStoreFromRoot() (*store.Store, error) {
 	root, err := findMarrowRoot()
 	if err != nil {
-		cwd, _ := os.Getwd()
-		return store.New(cwd)
+		return nil, err
 	}
-	return store.New(root)
+	return store.New(root), nil
 }
 
 func init() {

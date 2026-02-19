@@ -10,7 +10,10 @@ var summaryCmd = &cobra.Command{
 	Use:   "summary",
 	Short: "Print a concise project summary",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		proj, err := s.ReadProject()
 		if err != nil {

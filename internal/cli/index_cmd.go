@@ -17,17 +17,22 @@ var indexRebuildCmd = &cobra.Command{
 	Use:   "rebuild",
 	Short: "Fully rebuild the index from experiment data",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		idx, err := index.Rebuild(s)
 		if err != nil {
 			return fmt.Errorf("rebuilding index: %w", err)
 		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "index_rebuilt",
 			Summary: fmt.Sprintf("%d experiments indexed", idx.Computed.TotalExperiments),
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Index rebuilt: %d experiments, best: %s\n",
 			idx.Computed.TotalExperiments,
@@ -40,7 +45,10 @@ var indexShowCmd = &cobra.Command{
 	Use:   "show",
 	Short: "Show the current index",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		idx, err := s.ReadIndex()
 		if err != nil {

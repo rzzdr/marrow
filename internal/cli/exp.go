@@ -34,9 +34,9 @@ var expNewCmd = &cobra.Command{
 	Use:   "new",
 	Short: "Create a new experiment record",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
-		if !s.Exists() {
-			return fmt.Errorf("no .marrow/ found. Run 'marrow init' first")
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
 		}
 
 		if !validStatuses[expStatus] {
@@ -84,10 +84,10 @@ var expNewCmd = &cobra.Command{
 				exp.Metric.Delta = exp.Metric.Value - parent.Metric.Value
 			}
 		} else {
-			idx, _ := s.ReadIndex()
-			if idx.Computed.BestMetric != nil {
-				exp.Metric.Baseline = idx.Computed.BestMetric.Value
-				exp.Metric.Delta = exp.Metric.Value - idx.Computed.BestMetric.Value
+			curIdx, err := s.ReadIndex()
+			if err == nil && curIdx.Computed.BestMetric != nil {
+				exp.Metric.Baseline = curIdx.Computed.BestMetric.Value
+				exp.Metric.Delta = exp.Metric.Value - curIdx.Computed.BestMetric.Value
 			}
 		}
 
@@ -99,11 +99,13 @@ var expNewCmd = &cobra.Command{
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: index update failed: %v\n", err)
 		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "exp_logged",
 			ID:      id,
 			Summary: format.ExperimentOneLiner(exp),
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Created experiment %s\n", id)
 		return nil
@@ -126,7 +128,10 @@ var expListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all experiments",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		exps, err := s.ListExperiments()
 		if err != nil {
@@ -182,7 +187,10 @@ var expShowCmd = &cobra.Command{
 	Short: "Show full details of an experiment",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		exp, err := s.ReadExperiment(args[0])
 		if err != nil {
@@ -227,7 +235,10 @@ var expEditCmd = &cobra.Command{
 	Short: "Edit an experiment's notes, status, or tags",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		exp, err := s.ReadExperiment(args[0])
 		if err != nil {
@@ -263,11 +274,13 @@ var expEditCmd = &cobra.Command{
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: index rebuild failed: %v\n", err)
 		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "exp_edited",
 			ID:      args[0],
 			Summary: "edited experiment " + args[0],
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Updated experiment %s\n", args[0])
 		return nil
@@ -279,7 +292,10 @@ var expDeleteCmd = &cobra.Command{
 	Short: "Delete an experiment",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		refs, err := s.FindParentRefs(args[0])
 		if err != nil {
@@ -293,11 +309,13 @@ var expDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "exp_deleted",
 			ID:      args[0],
 			Summary: "deleted experiment " + args[0],
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		if _, err := index.Rebuild(s); err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: index rebuild failed: %v\n", err)

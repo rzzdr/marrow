@@ -77,7 +77,9 @@ var initCmd = &cobra.Command{
 		}
 
 		gitignorePath := filepath.Join(s.Root(), ".gitignore")
-		_ = os.WriteFile(gitignorePath, []byte("snapshots/\n.marrow-tmp-*\n"), 0644)
+		if err := os.WriteFile(gitignorePath, []byte("snapshots/\n.marrow-tmp-*\n"), 0644); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to create .gitignore: %v\n", err)
+		}
 
 		fmt.Println("Initialized .marrow/ project")
 		if initTemplate != "" {

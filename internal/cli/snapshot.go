@@ -24,9 +24,9 @@ var snapshotCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a snapshot of the current .marrow/ state",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
-		if !s.Exists() {
-			return fmt.Errorf("no .marrow/ found")
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
 		}
 
 		src := s.Root()
@@ -43,10 +43,12 @@ var snapshotCreateCmd = &cobra.Command{
 			return fmt.Errorf("creating snapshot: %w", err)
 		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "snapshot_created",
 			Summary: fullName,
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Snapshot created: %s\n", fullName)
 		return nil
@@ -57,7 +59,10 @@ var snapshotListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available snapshots",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 		dir := filepath.Join(s.Root(), "snapshots")
 
 		entries, err := os.ReadDir(dir)
