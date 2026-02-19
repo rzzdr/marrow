@@ -1,18 +1,21 @@
-package mcp
+package tests
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
-	"github.com/mark3labs/mcp-go/mcp"
+	gomcp "github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
+	"github.com/rzzdr/marrow/internal/mcp"
 	"github.com/rzzdr/marrow/internal/model"
 	"github.com/rzzdr/marrow/internal/store"
 )
 
-// helper to create a temp .marrow store for tests
+// setupTestStore creates a temp .marrow store for tests.
 func setupTestStore(t *testing.T) *store.Store {
 	t.Helper()
 	dir := t.TempDir()
@@ -31,90 +34,90 @@ func setupTestStore(t *testing.T) *store.Store {
 	return s
 }
 
-// helper to create a CallToolRequest with given arguments
-func makeRequest(args map[string]any) mcp.CallToolRequest {
-	return mcp.CallToolRequest{
-		Params: mcp.CallToolParams{
-			Arguments: args,
+// callTool sends a tools/call JSON-RPC message to the server and returns the result.
+func callTool(t *testing.T, srv *server.MCPServer, name string, args map[string]any) *gomcp.CallToolResult {
+	t.Helper()
+	req := gomcp.JSONRPCRequest{
+		JSONRPC: "2.0",
+		ID:      gomcp.NewRequestId(int64(1)),
+		Request: gomcp.Request{
+			Method: "tools/call",
 		},
 	}
+	// Build raw message with params embedded
+	raw := map[string]any{
+		"jsonrpc": req.JSONRPC,
+		"id":      1,
+		"method":  "tools/call",
+		"params": map[string]any{
+			"name":      name,
+			"arguments": args,
+		},
+	}
+	msg, err := json.Marshal(raw)
+	if err != nil {
+		t.Fatalf("failed to marshal request: %v", err)
+	}
+
+	resp := srv.HandleMessage(context.Background(), msg)
+	if resp == nil {
+		t.Fatal("nil response from HandleMessage")
+	}
+
+	jsonResp, ok := resp.(gomcp.JSONRPCResponse)
+	if !ok {
+		// Check if it's an error response
+		jsonErr, errOk := resp.(gomcp.JSONRPCError)
+		if errOk {
+			t.Fatalf("JSON-RPC error: %v", jsonErr.Error)
+		}
+		t.Fatalf("unexpected response type: %T", resp)
+	}
+
+	result, ok := jsonResp.Result.(*gomcp.CallToolResult)
+	if !ok {
+		t.Fatalf("unexpected result type: %T", jsonResp.Result)
+	}
+	return result
 }
 
-// helper to extract text from CallToolResult
-func resultText(r *mcp.CallToolResult) string {
+// resultText extracts text from a CallToolResult.
+func resultText(r *gomcp.CallToolResult) string {
 	if r == nil || len(r.Content) == 0 {
 		return ""
 	}
-	if tc, ok := r.Content[0].(mcp.TextContent); ok {
+	if tc, ok := r.Content[0].(gomcp.TextContent); ok {
 		return tc.Text
 	}
 	return ""
 }
 
-func TestFormatWarnings(t *testing.T) {
-	t.Run("empty warnings returns empty string", func(t *testing.T) {
-		result := formatWarnings(nil)
-		if result != "" {
-			t.Errorf("expected empty string, got %q", result)
-		}
-		result = formatWarnings([]string{})
-		if result != "" {
-			t.Errorf("expected empty string, got %q", result)
-		}
-	})
+func TestGetProjectSummary_MissingProject(t *testing.T) {
+	dir := t.TempDir()
+	s := store.New(dir)
+	// Don't init — project file won't exist
+	srv := mcp.NewServer(s)
 
-	t.Run("single warning", func(t *testing.T) {
-		result := formatWarnings([]string{"something failed"})
-		if !strings.Contains(result, "⚠ Warnings:") {
-			t.Errorf("expected warning header, got %q", result)
-		}
-		if !strings.Contains(result, "something failed") {
-			t.Errorf("expected warning text, got %q", result)
-		}
-	})
-
-	t.Run("multiple warnings", func(t *testing.T) {
-		result := formatWarnings([]string{"warn1", "warn2"})
-		if !strings.Contains(result, "warn1") || !strings.Contains(result, "warn2") {
-			t.Errorf("expected both warnings, got %q", result)
-		}
-	})
-}
-
-func TestGetProjectSummary_StoreErrors(t *testing.T) {
-	t.Run("missing project file returns error", func(t *testing.T) {
-		dir := t.TempDir()
-		s := store.New(dir)
-		// Don't init — project file won't exist
-		h := &handlers{store: s}
-
-		result, err := h.getProjectSummary(context.Background(), makeRequest(nil))
-		if err != nil {
-			t.Fatalf("unexpected Go error: %v", err)
-		}
-		if !result.IsError {
-			t.Error("expected tool error result when project is missing")
-		}
-		text := resultText(result)
-		if !strings.Contains(text, "failed to read project") {
-			t.Errorf("expected 'failed to read project' in error, got %q", text)
-		}
-	})
+	result := callTool(t, srv, "get_project_summary", nil)
+	if !result.IsError {
+		t.Error("expected tool error result when project is missing")
+	}
+	text := resultText(result)
+	if !strings.Contains(text, "failed to read project") {
+		t.Errorf("expected 'failed to read project' in error, got %q", text)
+	}
 }
 
 func TestLogExperiment_WarningsOnChangelogFailure(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
 	// Log first experiment normally
-	result, err := h.logExperiment(context.Background(), makeRequest(map[string]any{
+	result := callTool(t, srv, "log_experiment", map[string]any{
 		"status":       "improved",
 		"metric_value": 0.85,
 		"base_model":   "xgboost",
-	}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	})
 	if result.IsError {
 		t.Fatalf("expected success, got error: %s", resultText(result))
 	}
@@ -130,13 +133,10 @@ func TestLogExperiment_WarningsOnChangelogFailure(t *testing.T) {
 	}
 	defer os.Chmod(changelogPath, 0644)
 
-	result, err = h.logExperiment(context.Background(), makeRequest(map[string]any{
+	result = callTool(t, srv, "log_experiment", map[string]any{
 		"status":       "neutral",
 		"metric_value": 0.80,
-	}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	})
 	// Primary operation should still succeed
 	if result.IsError {
 		t.Fatalf("expected success with warnings, got error: %s", resultText(result))
@@ -145,7 +145,6 @@ func TestLogExperiment_WarningsOnChangelogFailure(t *testing.T) {
 	if !strings.Contains(text, "Logged experiment") {
 		t.Errorf("expected success message, got %q", text)
 	}
-	// But should contain warning about changelog
 	if !strings.Contains(text, "⚠ Warnings:") {
 		t.Errorf("expected warnings in result, got %q", text)
 	}
@@ -156,15 +155,12 @@ func TestLogExperiment_WarningsOnChangelogFailure(t *testing.T) {
 
 func TestLogExperiment_InvalidStatus(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
-	result, err := h.logExperiment(context.Background(), makeRequest(map[string]any{
+	result := callTool(t, srv, "log_experiment", map[string]any{
 		"status":       "bogus",
 		"metric_value": 0.5,
-	}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	})
 	if !result.IsError {
 		t.Error("expected error for invalid status")
 	}
@@ -176,7 +172,7 @@ func TestLogExperiment_InvalidStatus(t *testing.T) {
 
 func TestAddLearning_WarningsOnChangelogFailure(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
 	// Make changelog unwritable
 	changelogPath := filepath.Join(s.Root(), "changelog.yaml")
@@ -185,14 +181,10 @@ func TestAddLearning_WarningsOnChangelogFailure(t *testing.T) {
 	}
 	defer os.Chmod(changelogPath, 0644)
 
-	result, err := h.addLearning(context.Background(), makeRequest(map[string]any{
+	result := callTool(t, srv, "add_learning", map[string]any{
 		"text": "test learning",
 		"type": "proven",
-	}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
-	// Primary operation should succeed
+	})
 	if result.IsError {
 		t.Fatalf("expected success with warnings, got error: %s", resultText(result))
 	}
@@ -207,7 +199,7 @@ func TestAddLearning_WarningsOnChangelogFailure(t *testing.T) {
 
 func TestAddGraveyardEntry_WarningsOnChangelogFailure(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
 	// Make changelog unwritable
 	changelogPath := filepath.Join(s.Root(), "changelog.yaml")
@@ -216,13 +208,10 @@ func TestAddGraveyardEntry_WarningsOnChangelogFailure(t *testing.T) {
 	}
 	defer os.Chmod(changelogPath, 0644)
 
-	result, err := h.addGraveyardEntry(context.Background(), makeRequest(map[string]any{
+	result := callTool(t, srv, "add_graveyard_entry", map[string]any{
 		"approach": "tried approach X",
 		"reason":   "did not improve metric",
-	}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	})
 	if result.IsError {
 		t.Fatalf("expected success with warnings, got error: %s", resultText(result))
 	}
@@ -237,7 +226,7 @@ func TestAddGraveyardEntry_WarningsOnChangelogFailure(t *testing.T) {
 
 func TestUpdatePinned_WarningsOnChangelogFailure(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
 	// Make changelog unwritable
 	changelogPath := filepath.Join(s.Root(), "changelog.yaml")
@@ -246,14 +235,11 @@ func TestUpdatePinned_WarningsOnChangelogFailure(t *testing.T) {
 	}
 	defer os.Chmod(changelogPath, 0644)
 
-	result, err := h.updatePinned(context.Background(), makeRequest(map[string]any{
+	result := callTool(t, srv, "update_pinned", map[string]any{
 		"field":  "do_not_try",
 		"action": "add",
 		"value":  "never try random forests",
-	}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	})
 	if result.IsError {
 		t.Fatalf("expected success with warnings, got error: %s", resultText(result))
 	}
@@ -268,7 +254,7 @@ func TestUpdatePinned_WarningsOnChangelogFailure(t *testing.T) {
 
 func TestUpdatePinned_NotesChangelogWarning(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
 	// Make changelog unwritable
 	changelogPath := filepath.Join(s.Root(), "changelog.yaml")
@@ -277,14 +263,11 @@ func TestUpdatePinned_NotesChangelogWarning(t *testing.T) {
 	}
 	defer os.Chmod(changelogPath, 0644)
 
-	result, err := h.updatePinned(context.Background(), makeRequest(map[string]any{
+	result := callTool(t, srv, "update_pinned", map[string]any{
 		"field":  "notes",
 		"action": "set",
 		"value":  "some note",
-	}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	})
 	if result.IsError {
 		t.Fatalf("expected success with warnings, got error: %s", resultText(result))
 	}
@@ -299,14 +282,11 @@ func TestUpdatePinned_NotesChangelogWarning(t *testing.T) {
 
 func TestGetExperiment_NotFound(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
-	result, err := h.getExperiment(context.Background(), makeRequest(map[string]any{
+	result := callTool(t, srv, "get_experiment", map[string]any{
 		"id": "exp_999",
-	}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	})
 	if !result.IsError {
 		t.Error("expected error for non-existent experiment")
 	}
@@ -318,12 +298,9 @@ func TestGetExperiment_NotFound(t *testing.T) {
 
 func TestGetLearnings_EmptyStore(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
-	result, err := h.getLearnings(context.Background(), makeRequest(map[string]any{}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	result := callTool(t, srv, "get_learnings", map[string]any{})
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", resultText(result))
 	}
@@ -335,12 +312,9 @@ func TestGetLearnings_EmptyStore(t *testing.T) {
 
 func TestGetFailures_EmptyStore(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
-	result, err := h.getFailures(context.Background(), makeRequest(map[string]any{}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	result := callTool(t, srv, "get_failures", map[string]any{})
 	if result.IsError {
 		t.Fatalf("unexpected error: %s", resultText(result))
 	}
@@ -352,7 +326,7 @@ func TestGetFailures_EmptyStore(t *testing.T) {
 
 func TestLogExperiment_BaselineWarningOnCorruptIndex(t *testing.T) {
 	s := setupTestStore(t)
-	h := &handlers{store: s}
+	srv := mcp.NewServer(s)
 
 	// Corrupt the index file
 	indexPath := filepath.Join(s.Root(), "index.yaml")
@@ -360,13 +334,10 @@ func TestLogExperiment_BaselineWarningOnCorruptIndex(t *testing.T) {
 		t.Fatalf("failed to corrupt index: %v", err)
 	}
 
-	result, err := h.logExperiment(context.Background(), makeRequest(map[string]any{
+	result := callTool(t, srv, "log_experiment", map[string]any{
 		"status":       "improved",
 		"metric_value": 0.85,
-	}))
-	if err != nil {
-		t.Fatalf("unexpected Go error: %v", err)
-	}
+	})
 	// Should still succeed with warnings
 	if result.IsError {
 		t.Fatalf("expected success with warnings, got error: %s", resultText(result))
