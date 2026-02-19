@@ -431,9 +431,9 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("failed to write experiment: %v", err)), nil
 	}
 
-	var warning string
+	var warnings []string
 	if _, err := idx.UpdateIncremental(h.store, exp); err != nil {
-		warning = fmt.Sprintf("\nwarning: index update failed: %v", err)
+		warnings = append(warnings, fmt.Sprintf("index update failed: %v", err))
 	}
 
 	if err := h.store.AppendChangelog(model.ChangelogEntry{
@@ -441,16 +441,12 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 		ID:      id,
 		Summary: format.ExperimentOneLiner(exp),
 	}); err != nil {
-		if warning != "" {
-			warning += fmt.Sprintf("\nwarning: changelog append failed: %v", err)
-		} else {
-			warning = fmt.Sprintf("\nwarning: changelog append failed: %v", err)
-		}
+		warnings = append(warnings, fmt.Sprintf("changelog append failed: %v", err))
 	}
 
 	result := fmt.Sprintf("Logged experiment %s (%s = %.4f, %s)", id, proj.Metric.Name, metricVal, status)
-	if warning != "" {
-		result += warning
+	if len(warnings) > 0 {
+		result += "\n\n⚠ Warnings:\n  - " + strings.Join(warnings, "\n  - ")
 	}
 	return mcp.NewToolResultText(result), nil
 }
