@@ -87,10 +87,10 @@ var expNewCmd = &cobra.Command{
 				exp.Metric.Delta = exp.Metric.Value - parent.Metric.Value
 			}
 		} else {
-			idx, _ := s.ReadIndex()
-			if idx.Computed.BestMetric != nil {
-				exp.Metric.Baseline = idx.Computed.BestMetric.Value
-				exp.Metric.Delta = exp.Metric.Value - idx.Computed.BestMetric.Value
+			curIdx, err := s.ReadIndex()
+			if err == nil && curIdx.Computed.BestMetric != nil {
+				exp.Metric.Baseline = curIdx.Computed.BestMetric.Value
+				exp.Metric.Delta = exp.Metric.Value - curIdx.Computed.BestMetric.Value
 			}
 		}
 
@@ -102,11 +102,13 @@ var expNewCmd = &cobra.Command{
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: index update failed: %v\n", err)
 		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "exp_logged",
 			ID:      id,
 			Summary: format.ExperimentOneLiner(exp),
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Created experiment %s\n", id)
 		return nil
@@ -275,11 +277,13 @@ var expEditCmd = &cobra.Command{
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: index rebuild failed: %v\n", err)
 		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "exp_edited",
 			ID:      args[0],
 			Summary: "edited experiment " + args[0],
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Updated experiment %s\n", args[0])
 		return nil
@@ -308,11 +312,13 @@ var expDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "exp_deleted",
 			ID:      args[0],
 			Summary: "deleted experiment " + args[0],
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		if _, err := index.Rebuild(s); err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "warning: index rebuild failed: %v\n", err)

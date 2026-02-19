@@ -61,14 +61,18 @@ var learnAddCmd = &cobra.Command{
 			return err
 		}
 
-		_ = index.UpdateLearningCounts(s)
+		if err := index.UpdateLearningCounts(s); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to update learning counts: %v\n", err)
+		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "learning_added",
 			ID:      id,
 			Type:    learnType,
 			Summary: l.Text,
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Added learning %s [%s]\n", id, learnType)
 		return nil
@@ -138,13 +142,17 @@ var learnGraveyardAddCmd = &cobra.Command{
 			return err
 		}
 
-		_ = index.UpdateLearningCounts(s)
+		if err := index.UpdateLearningCounts(s); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to update learning counts: %v\n", err)
+		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "graveyard_added",
 			ID:      id,
 			Summary: g.Approach + " — " + g.Reason,
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Added graveyard entry %s\n", id)
 		return nil
@@ -215,13 +223,17 @@ var learnDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		_ = index.UpdateLearningCounts(s)
+		if err := index.UpdateLearningCounts(s); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to update learning counts: %v\n", err)
+		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "learning_deleted",
 			ID:      args[0],
 			Summary: "deleted learning " + args[0],
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Deleted learning %s\n", args[0])
 		return nil
@@ -242,13 +254,17 @@ var learnGraveyardDeleteCmd = &cobra.Command{
 			return err
 		}
 
-		_ = index.UpdateLearningCounts(s)
+		if err := index.UpdateLearningCounts(s); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to update learning counts: %v\n", err)
+		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "graveyard_deleted",
 			ID:      args[0],
 			Summary: "deleted graveyard entry " + args[0],
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Deleted graveyard entry %s\n", args[0])
 		return nil

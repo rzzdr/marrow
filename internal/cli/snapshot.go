@@ -46,10 +46,12 @@ var snapshotCreateCmd = &cobra.Command{
 			return fmt.Errorf("creating snapshot: %w", err)
 		}
 
-		_ = s.AppendChangelog(model.ChangelogEntry{
+		if err := s.AppendChangelog(model.ChangelogEntry{
 			Action:  "snapshot_created",
 			Summary: fullName,
-		})
+		}); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: failed to append changelog: %v\n", err)
+		}
 
 		fmt.Printf("Snapshot created: %s\n", fullName)
 		return nil
