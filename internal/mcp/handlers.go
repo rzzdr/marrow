@@ -176,7 +176,10 @@ func (h *handlers) getFailures(_ context.Context, req mcp.CallToolRequest) (*mcp
 		if depth == model.DepthSummary {
 			fmt.Fprintf(&b, "  %s\n", format.GraveyardOneLiner(g))
 		} else {
-			y, _ := format.MarshalYAMLString(g)
+			y, err := format.MarshalYAMLString(g)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal graveyard entry: %v", err)), nil
+			}
 			b.WriteString(y)
 		}
 	}
@@ -257,7 +260,10 @@ func (h *handlers) getExperimentChain(_ context.Context, req mcp.CallToolRequest
 			fmt.Fprintf(&b, "%s\n", format.ExperimentOneLiner(exp))
 		} else {
 			fe := format.FilterExperiment(exp, depth)
-			y, _ := format.MarshalYAMLString(fe)
+			y, err := format.MarshalYAMLString(fe)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal experiment: %v", err)), nil
+			}
 			b.WriteString(y)
 			b.WriteString("---\n")
 		}
@@ -314,7 +320,10 @@ func (h *handlers) compareExperiments(_ context.Context, req mcp.CallToolRequest
 	fmt.Fprintf(&b, "%s:\n  %s = %.4f | status: %s | model: %s\n",
 		id2, exp2.Metric.Name, exp2.Metric.Value, exp2.Status, exp2.BaseModel)
 
-	proj, _ := h.store.ReadProject()
+	proj, err := h.store.ReadProject()
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("failed to read project: %v", err)), nil
+	}
 	delta := exp2.Metric.Value - exp1.Metric.Value
 	direction := "improvement"
 	if (strings.EqualFold(proj.Metric.Direction, "higher_is_better") && delta < 0) ||
@@ -411,8 +420,8 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 			exp.Metric.Delta = exp.Metric.Value - parent.Metric.Value
 		}
 	} else {
-		curIdx, _ := h.store.ReadIndex()
-		if curIdx.Computed.BestMetric != nil {
+		curIdx, err := h.store.ReadIndex()
+		if err == nil && curIdx.Computed.BestMetric != nil {
 			exp.Metric.Baseline = curIdx.Computed.BestMetric.Value
 			exp.Metric.Delta = exp.Metric.Value - curIdx.Computed.BestMetric.Value
 		}
@@ -427,11 +436,17 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 		warning = fmt.Sprintf("\nwarning: index update failed: %v", err)
 	}
 
-	_ = h.store.AppendChangelog(model.ChangelogEntry{
+	if err := h.store.AppendChangelog(model.ChangelogEntry{
 		Action:  "exp_logged",
 		ID:      id,
 		Summary: format.ExperimentOneLiner(exp),
-	})
+	}); err != nil {
+		if warning != "" {
+			warning += fmt.Sprintf("\nwarning: changelog append failed: %v", err)
+		} else {
+			warning = fmt.Sprintf("\nwarning: changelog append failed: %v", err)
+		}
+	}
 
 	result := fmt.Sprintf("Logged experiment %s (%s = %.4f, %s)", id, proj.Metric.Name, metricVal, status)
 	if warning != "" {
@@ -474,16 +489,24 @@ func (h *handlers) addLearning(_ context.Context, req mcp.CallToolRequest) (*mcp
 		return mcp.NewToolResultError("failed to add learning: " + err.Error()), nil
 	}
 
-	_ = h.store.AppendChangelog(model.ChangelogEntry{
+	var warnings []string
+	if err := h.store.AppendChangelog(model.ChangelogEntry{
 		Action:  "learning_added",
 		ID:      id,
 		Type:    typ,
 		Summary: text,
-	})
+	}); err != nil {
+		warnings = append(warnings, fmt.Sprintf("changelog append failed: %v", err))
+	}
 
-	_ = idx.UpdateLearningCounts(h.store)
+	if err := idx.UpdateLearningCounts(h.store); err != nil {
+		warnings = append(warnings, fmt.Sprintf("learning counts update failed: %v", err))
+	}
 
 	result := fmt.Sprintf("Added learning %s [%s]", id, typ)
+	if len(warnings) > 0 {
+		result += "\n\n⚠ Warnings:\n  - " + strings.Join(warnings, "\n  - ")
+	}
 	if len(conflicts) > 0 {
 		result += "\n\n⚠ Potential conflicts:"
 		for _, c := range conflicts {
@@ -522,15 +545,24 @@ func (h *handlers) addGraveyardEntry(_ context.Context, req mcp.CallToolRequest)
 		return mcp.NewToolResultError("failed to add entry: " + err.Error()), nil
 	}
 
-	_ = h.store.AppendChangelog(model.ChangelogEntry{
+	var warnings []string
+	if err := h.store.AppendChangelog(model.ChangelogEntry{
 		Action:  "graveyard_added",
 		ID:      id,
 		Summary: approach + " — " + reason,
-	})
+	}); err != nil {
+		warnings = append(warnings, fmt.Sprintf("changelog append failed: %v", err))
+	}
 
-	_ = idx.UpdateLearningCounts(h.store)
+	if err := idx.UpdateLearningCounts(h.store); err != nil {
+		warnings = append(warnings, fmt.Sprintf("learning counts update failed: %v", err))
+	}
 
-	return mcp.NewToolResultText(fmt.Sprintf("Added graveyard entry %s", id)), nil
+	result := fmt.Sprintf("Added graveyard entry %s", id)
+	if len(warnings) > 0 {
+		result += "\n\n⚠ Warnings:\n  - " + strings.Join(warnings, "\n  - ")
+	}
+	return mcp.NewToolResultText(result), nil
 }
 
 func (h *handlers) updatePinned(_ context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -728,7 +760,10 @@ func experimentsResult(exps []model.Experiment, depth model.Depth) (*mcp.CallToo
 			fmt.Fprintf(&b, "%s\n", format.ExperimentOneLiner(e))
 		} else {
 			fe := format.FilterExperiment(e, depth)
-			y, _ := format.MarshalYAMLString(fe)
+			y, err := format.MarshalYAMLString(fe)
+			if err != nil {
+				return mcp.NewToolResultError(fmt.Sprintf("failed to marshal experiment: %v", err)), nil
+			}
 			b.WriteString(y)
 			b.WriteString("---\n")
 		}

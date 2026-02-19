@@ -34,7 +34,10 @@ var expNewCmd = &cobra.Command{
 	Use:   "new",
 	Short: "Create a new experiment record",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 		if !s.Exists() {
 			return fmt.Errorf("no .marrow/ found. Run 'marrow init' first")
 		}
@@ -126,7 +129,10 @@ var expListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all experiments",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		exps, err := s.ListExperiments()
 		if err != nil {
@@ -182,7 +188,10 @@ var expShowCmd = &cobra.Command{
 	Short: "Show full details of an experiment",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		exp, err := s.ReadExperiment(args[0])
 		if err != nil {
@@ -227,7 +236,10 @@ var expEditCmd = &cobra.Command{
 	Short: "Edit an experiment's notes, status, or tags",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		exp, err := s.ReadExperiment(args[0])
 		if err != nil {
@@ -279,7 +291,10 @@ var expDeleteCmd = &cobra.Command{
 	Short: "Delete an experiment",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		refs, err := s.FindParentRefs(args[0])
 		if err != nil {

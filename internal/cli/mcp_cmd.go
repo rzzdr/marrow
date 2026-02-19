@@ -11,7 +11,10 @@ var mcpCmd = &cobra.Command{
 	Use:   "mcp",
 	Short: "Start the MCP server for AI agent integration",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 		if !s.Exists() {
 			return fmt.Errorf("no .marrow/ found. Run 'marrow init' first")
 		}

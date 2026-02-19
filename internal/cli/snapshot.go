@@ -24,7 +24,10 @@ var snapshotCreateCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a snapshot of the current .marrow/ state",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 		if !s.Exists() {
 			return fmt.Errorf("no .marrow/ found")
 		}
@@ -57,7 +60,10 @@ var snapshotListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List available snapshots",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 		dir := filepath.Join(s.Root(), "snapshots")
 
 		entries, err := os.ReadDir(dir)

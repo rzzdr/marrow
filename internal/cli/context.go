@@ -15,7 +15,10 @@ var ctxListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all context files",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		names, err := s.ListContextFiles()
 		if err != nil {
@@ -40,7 +43,10 @@ var ctxShowCmd = &cobra.Command{
 	Short: "Show a context file's contents",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		raw, err := s.ReadContextRaw(args[0])
 		if err != nil {

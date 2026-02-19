@@ -25,7 +25,10 @@ var learnAddCmd = &cobra.Command{
 	Long:  "Add a proven finding, assumption, or graveyard entry.",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 		if !s.Exists() {
 			return fmt.Errorf("no .marrow/ found. Run 'marrow init' first")
 		}
@@ -76,7 +79,10 @@ var learnListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all learnings",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		lf, err := s.ReadLearnings()
 		if err != nil {
@@ -113,7 +119,10 @@ var learnGraveyardAddCmd = &cobra.Command{
 	Use:   "graveyard",
 	Short: "Add a failed approach to the graveyard",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		g := model.GraveyardEntry{
 			Approach:     graveApproach,
@@ -146,7 +155,10 @@ var learnGraveyardListCmd = &cobra.Command{
 	Use:   "graveyard-list",
 	Short: "List all failed approaches",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		gf, err := s.ReadGraveyard()
 		if err != nil {
@@ -194,7 +206,10 @@ var learnDeleteCmd = &cobra.Command{
 	Short: "Delete a learning",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		if err := s.DeleteLearning(args[0]); err != nil {
 			return err
@@ -218,7 +233,10 @@ var learnGraveyardDeleteCmd = &cobra.Command{
 	Short: "Delete a graveyard entry",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := getStoreFromRoot()
+		s, err := getStoreFromRoot()
+		if err != nil {
+			return err
+		}
 
 		if err := s.DeleteGraveyardEntry(args[0]); err != nil {
 			return err
