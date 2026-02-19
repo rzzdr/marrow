@@ -413,15 +413,21 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 		exp.Tags = util.SplitTags(tags)
 	}
 
+	var warnings []string
+
 	// Compute delta relative to best parent or current best
 	if len(exp.Parents) > 0 {
 		if parent, err := h.store.ReadExperiment(exp.Parents[0]); err == nil {
 			exp.Metric.Baseline = parent.Metric.Value
 			exp.Metric.Delta = exp.Metric.Value - parent.Metric.Value
+		} else {
+			warnings = append(warnings, fmt.Sprintf("could not compute baseline from parent: %v", err))
 		}
 	} else {
 		curIdx, err := h.store.ReadIndex()
-		if err == nil && curIdx.Computed.BestMetric != nil {
+		if err != nil {
+			warnings = append(warnings, fmt.Sprintf("could not compute baseline from index: %v", err))
+		} else if curIdx.Computed.BestMetric != nil {
 			exp.Metric.Baseline = curIdx.Computed.BestMetric.Value
 			exp.Metric.Delta = exp.Metric.Value - curIdx.Computed.BestMetric.Value
 		}
@@ -431,7 +437,6 @@ func (h *handlers) logExperiment(_ context.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("failed to write experiment: %v", err)), nil
 	}
 
-	var warnings []string
 	if _, err := idx.UpdateIncremental(h.store, exp); err != nil {
 		warnings = append(warnings, fmt.Sprintf("index update failed: %v", err))
 	}
