@@ -336,9 +336,12 @@ func (h *handlers) compareExperiments(_ context.Context, req mcp.CallToolRequest
 
 	delta := exp2.Metric.Value - exp1.Metric.Value
 	metricDirection := "higher_is_better" // default when project is unreadable
+	var warnings []string
 	proj, err := h.store.ReadProject()
 	if err == nil {
 		metricDirection = proj.Metric.Direction
+	} else {
+		warnings = append(warnings, fmt.Sprintf("project unreadable, assuming higher_is_better: %v", err))
 	}
 	direction := "improvement"
 	if (strings.EqualFold(metricDirection, "higher_is_better") && delta < 0) ||
@@ -354,7 +357,7 @@ func (h *handlers) compareExperiments(_ context.Context, req mcp.CallToolRequest
 		fmt.Fprintf(&b, "\n%s notes: %s\n", id2, exp2.Notes)
 	}
 
-	text := b.String()
+	text := b.String() + formatWarnings(warnings)
 	return toolResultWithMeta(text, format.EstimateTokens(text), "standard"), nil
 }
 

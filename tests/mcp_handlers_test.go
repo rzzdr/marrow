@@ -350,3 +350,50 @@ func TestLogExperiment_BaselineWarningOnCorruptIndex(t *testing.T) {
 		t.Errorf("expected warnings about baseline/index, got %q", text)
 	}
 }
+
+func TestCompareExperiments_WarningOnUnreadableProject(t *testing.T) {
+	s := setupTestStore(t)
+	srv := mcp.NewServer(s)
+
+	// Log two experiments so we can compare them
+	callTool(t, srv, "log_experiment", map[string]any{
+		"status":       "improved",
+		"metric_value": 0.80,
+		"base_model":   "xgboost",
+	})
+	callTool(t, srv, "log_experiment", map[string]any{
+		"status":       "improved",
+		"metric_value": 0.90,
+		"base_model":   "xgboost",
+	})
+
+	// Corrupt the project file so ReadProject fails
+	projPath := filepath.Join(s.Root(), "marrow.yaml")
+	if err := os.WriteFile(projPath, []byte("not: valid: yaml: [[["), 0644); err != nil {
+		t.Fatalf("failed to corrupt project: %v", err)
+	}
+
+	// List experiments to get their IDs
+	exps, err := s.ListExperiments()
+	if err != nil || len(exps) < 2 {
+		t.Fatalf("expected at least 2 experiments, got %d (err: %v)", len(exps), err)
+	}
+
+	result := callTool(t, srv, "compare_experiments", map[string]any{
+		"id1": exps[0].ID,
+		"id2": exps[1].ID,
+	})
+	if result.IsError {
+		t.Fatalf("expected success with warning, got error: %s", resultText(result))
+	}
+	text := resultText(result)
+	if !strings.Contains(text, "Comparison:") {
+		t.Errorf("expected comparison output, got %q", text)
+	}
+	if !strings.Contains(text, "⚠ Warnings:") {
+		t.Errorf("expected warnings about unreadable project, got %q", text)
+	}
+	if !strings.Contains(text, "assuming higher_is_better") {
+		t.Errorf("expected fallback direction warning, got %q", text)
+	}
+}
